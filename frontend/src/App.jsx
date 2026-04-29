@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
-const API = "http://localhost:8000";
+const API = "https://energy-prediction-system.onrender.com";
 
 /* ── Design tokens ─────────────────────────────────────────────────────────── */
 const T = {
