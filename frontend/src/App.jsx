@@ -107,9 +107,15 @@ function ChartTip({ active, payload, label }) {
 export default function App() {
   const [tab, setTab]             = useState("forecast");
   const [health, setHealth]       = useState(null);
+  const [availableModels, setAvailableModels] = useState([]);
   const [metrics, setMetrics]     = useState([]);
   const [forecast, setForecast]   = useState([]);
   const [horizon, setHorizon]     = useState(24);
+  const [forecastModel, setForecastModel] = useState("SARIMA");
+  const [temperature, setTemperature] = useState(0.5);
+  const [humidity, setHumidity] = useState(0.5);
+  const [windSpeed, setWindSpeed] = useState(0.3);
+  const [startTime, setStartTime] = useState("");
   const [anomalies, setAnomalies] = useState({});
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading]     = useState({});
@@ -120,7 +126,14 @@ export default function App() {
   useEffect(() => {
     if (!initialized.current) { injectStyle(STYLE); initialized.current = true; }
     const tick = setInterval(() => setTime(new Date()), 1000);
-    fetch(API + "/health").then(r => r.json()).then(setHealth).catch(() => setHealth({ status: "unreachable" }));
+    fetch(API + "/health")
+      .then(r => r.json())
+      .then(d => {
+        setHealth(d);
+        setAvailableModels(d.available_models || []);
+        if (d.best_model) setForecastModel(d.best_model);
+      })
+      .catch(() => setHealth({ status: "unreachable" }));
     fetch(API + "/model/info").then(r => r.json()).then(d => setMetrics(d.metrics || [])).catch(() => {});
     return () => clearInterval(tick);
   }, []);
@@ -128,12 +141,30 @@ export default function App() {
   const fetchForecast = useCallback(async () => {
     setLoading(l => ({ ...l, forecast: true })); setError(null);
     try {
-      const res = await fetch(API + "/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ horizon }) });
+      const payload = { horizon, model_name: forecastModel };
+
+      if (forecastModel === "LSTM") {
+        payload.temperature = temperature;
+        payload.humidity = humidity;
+        payload.wind_speed = windSpeed;
+        payload.start_time = startTime ? new Date(startTime).toISOString() : new Date().toISOString();
+      }
+
+      const res = await fetch(API + "/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await res.json();
-      setForecast((d.predictions || []).map((p, i) => ({ hour: "+" + (i + 1) + "h", kwh: parseFloat(p.predicted_kwh.toFixed(4)) })));
-    } catch { setError("Cannot reach API. Make sure api.py is running."); }
+      if (!res.ok) {
+        throw new Error(d?.detail || d?.message || "Forecast request failed.");
+      }
+      setForecast((d.predictions || []).map((p, i) => ({
+        time: p.timestamp ? new Date(p.timestamp).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "+" + (i + 1) + "h",
+        kwh: parseFloat(p.predicted_kwh.toFixed(4))
+      })));
+      if (d.model_used) setForecastModel(d.model_used);
+    } catch (err) {
+      setError(err?.message || "Cannot reach API. Make sure api.py is running.");
+    }
     setLoading(l => ({ ...l, forecast: false }));
-  }, [horizon]);
+  }, [forecastModel, horizon, humidity, startTime, temperature, windSpeed]);
 
   const fetchAnomalies = useCallback(async () => {
     setLoading(l => ({ ...l, anomaly: true }));
@@ -234,6 +265,42 @@ export default function App() {
           <div className="fade-up">
             <SLabel>Energy Consumption Forecast</SLabel>
             <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 16, padding: 28, marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+                <span className="mono" style={{ fontSize: 12, color: T.muted, letterSpacing: 1 }}>MODEL /</span>
+                <select value={forecastModel} onChange={e => setForecastModel(e.target.value)} style={{
+                  background: T.surface, color: T.text, border: "1px solid " + T.border,
+                  borderRadius: 8, padding: "8px 12px", fontFamily: "'Space Mono', monospace",
+                  fontSize: 12, outline: "none"
+                }}>
+                  <option value="SARIMA" disabled={availableModels.length > 0 && !availableModels.includes("SARIMA")}>SARIMA</option>
+                  <option value="LSTM" disabled={availableModels.length > 0 && !availableModels.includes("LSTM")}>LSTM</option>
+                </select>
+                {availableModels.length > 0 && !availableModels.includes(forecastModel) && (
+                  <span className="mono" style={{ color: T.amber, fontSize: 11 }}>Selected model artifact is not loaded on the backend.</span>
+                )}
+              </div>
+
+              {forecastModel === "LSTM" && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 20 }}>
+                  <label style={{ display: "grid", gap: 8 }}>
+                    <span className="mono" style={{ fontSize: 10, color: T.muted, letterSpacing: 2 }}>START DATE / TIME</span>
+                    <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} style={{ background: T.surface, color: T.text, border: "1px solid " + T.border, borderRadius: 8, padding: "10px 12px", fontFamily: "'Space Mono', monospace", fontSize: 12 }} />
+                  </label>
+                  <label style={{ display: "grid", gap: 8 }}>
+                    <span className="mono" style={{ fontSize: 10, color: T.muted, letterSpacing: 2 }}>TEMPERATURE</span>
+                    <input type="number" step="0.01" min="0" max="1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} style={{ background: T.surface, color: T.text, border: "1px solid " + T.border, borderRadius: 8, padding: "10px 12px", fontFamily: "'Space Mono', monospace", fontSize: 12 }} />
+                  </label>
+                  <label style={{ display: "grid", gap: 8 }}>
+                    <span className="mono" style={{ fontSize: 10, color: T.muted, letterSpacing: 2 }}>HUMIDITY</span>
+                    <input type="number" step="0.01" min="0" max="1" value={humidity} onChange={e => setHumidity(parseFloat(e.target.value))} style={{ background: T.surface, color: T.text, border: "1px solid " + T.border, borderRadius: 8, padding: "10px 12px", fontFamily: "'Space Mono', monospace", fontSize: 12 }} />
+                  </label>
+                  <label style={{ display: "grid", gap: 8 }}>
+                    <span className="mono" style={{ fontSize: 10, color: T.muted, letterSpacing: 2 }}>WIND SPEED</span>
+                    <input type="number" step="0.01" min="0" max="1" value={windSpeed} onChange={e => setWindSpeed(parseFloat(e.target.value))} style={{ background: T.surface, color: T.text, border: "1px solid " + T.border, borderRadius: 8, padding: "10px 12px", fontFamily: "'Space Mono', monospace", fontSize: 12 }} />
+                  </label>
+                </div>
+              )}
+
               <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
                 <span className="mono" style={{ fontSize: 12, color: T.muted, letterSpacing: 1 }}>HORIZON /</span>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -267,7 +334,7 @@ export default function App() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="1 4" stroke={T.border} />
-                    <XAxis dataKey="hour" tick={{ fill: T.muted, fontSize: 11, fontFamily: "Space Mono" }} interval={Math.floor(horizon / 6)} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="time" tick={{ fill: T.muted, fontSize: 11, fontFamily: "Space Mono" }} interval={Math.floor(horizon / 6)} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: T.muted, fontSize: 11, fontFamily: "Space Mono" }} axisLine={false} tickLine={false} />
                     <Tooltip content={<ChartTip />} />
                     <Area type="monotone" dataKey="kwh" stroke={T.accent} fill="url(#accentGrad)" strokeWidth={2} dot={false} name="kWh" />
