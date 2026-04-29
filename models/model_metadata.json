@@ -1,0 +1,42 @@
+{
+  "best_model": "SARIMA",
+  "lookback": 24,
+  "feature_cols": [
+    "Temperature",
+    "Humidity",
+    "Wind_Speed",
+    "Avg_Past_Consumption",
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "season",
+    "lag_1h",
+    "lag_24h",
+    "rolling_mean_6h"
+  ],
+  "target_col": "Electricity_Consumed",
+  "all_metrics": [
+    {
+      "model": "SARIMA",
+      "RMSE": 0.117065,
+      "MAE": 0.092116,
+      "MAPE": 37.8449,
+      "sMAPE": 26.2316,
+      "wMAPE": 24.9009
+    },
+    {
+      "model": "LSTM",
+      "RMSE": 0.126245,
+      "MAE": 0.099716,
+      "MAPE": 35.1229,
+      "sMAPE": 28.6034,
+      "wMAPE": 26.9554
+    }
+  ],
+  "available_models": [
+    "SARIMA",
+    "LSTM"
+  ]
+}
