@@ -5,7 +5,7 @@ scikit-learn==1.8.0
 scipy==1.17.1
 
 # ─── Deep learning ────────────────────────────────────────────────────────────
-tensorflow==2.21.0          # CPU build; use tensorflow-gpu for GPU support
+tensorflow==2.15.0          # CPU build; use tensorflow-gpu for GPU support
 
 # ─── Time-series ──────────────────────────────────────────────────────────────
 statsmodels==0.14.6
