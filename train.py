@@ -64,7 +64,7 @@ from scipy import stats
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DATA_PATH = "data/smart_meter_data.csv"      # ← change if your CSV is elsewhere
+DATA_PATH   = "smart_meter_data.csv"       # ← change if your CSV is elsewhere
 MODELS_DIR  = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
 
@@ -87,12 +87,7 @@ random.seed(42)
 # 1.  STEP 1 – LOAD DATASET
 # ─────────────────────────────────────────────────────────────────────────────
 def load_data(path: str) -> pd.DataFrame:
-    """
-    Load the smart meter CSV.
-    Keeps: Timestamp, Electricity_Consumed, Temperature, Humidity,
-           Wind_Speed, Avg_Past_Consumption, Anomaly_Label.
-    Drops any unexpected / unrelated columns silently.
-    """
+  
     log.info("Step 1 ▶ Loading dataset from '%s'", path)
     df = pd.read_csv(path)
 
@@ -101,12 +96,12 @@ def load_data(path: str) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Dataset is missing mandatory columns: {missing}")
 
-    # PRD-defined columns we want to keep if present
+    
     keep = [
         "Timestamp", "Electricity_Consumed",
         "Temperature", "Humidity", "Wind_Speed",
         "Avg_Past_Consumption", "Anomaly_Label",
-        # "Rainfall" would be kept here if present
+        
     ]
     existing = [c for c in keep if c in df.columns]
     df = df[existing].copy()
@@ -119,10 +114,7 @@ def load_data(path: str) -> pd.DataFrame:
 # 2.  STEP 2 – HANDLE MISSING VALUES
 # ─────────────────────────────────────────────────────────────────────────────
 def handle_missing(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Forward-fill then backward-fill numeric columns.
-    Fills Anomaly_Label NaNs with 'Normal'.
-    """
+   
     log.info("Step 2 ▶ Handling missing values")
 
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -496,28 +488,22 @@ def save_best_model(
     feature_cols: list,
 ):
     """
-    Save the winning model + metadata required by the prediction API.
+    Save both trained models + metadata required by the prediction API.
 
     Files written to models/:
-        best_model.pkl         → SARIMA fitted result  OR  LSTM keras model
-        lstm_scaler.pkl        → MinMaxScaler (LSTM only; None for SARIMA)
+        best_model.pkl         → SARIMA fitted result
+        best_model.keras       → LSTM keras model
+        lstm_scaler.pkl        → MinMaxScaler for the LSTM model
         model_metadata.json    → model name, metrics, feature columns, lookback
     """
     log.info("Step 10 ▶ Saving best model ('%s') to '%s/'", best_name, MODELS_DIR)
 
-    if best_name == "SARIMA":
-        with open(MODELS_DIR / "best_model.pkl", "wb") as f:
-            pickle.dump(sarima_fitted, f)
-        with open(MODELS_DIR / "lstm_scaler.pkl", "wb") as f:
-            pickle.dump(None, f)
+    with open(MODELS_DIR / "best_model.pkl", "wb") as f:
+        pickle.dump(sarima_fitted, f)
 
-    else:  # LSTM
-        lstm_model.save(str(MODELS_DIR / "best_model.keras"))
-        with open(MODELS_DIR / "lstm_scaler.pkl", "wb") as f:
-            pickle.dump(lstm_scaler, f)
-        # Also save an empty placeholder so the API loader is uniform
-        with open(MODELS_DIR / "best_model.pkl", "wb") as f:
-            pickle.dump(None, f)
+    lstm_model.save(str(MODELS_DIR / "best_model.keras"))
+    with open(MODELS_DIR / "lstm_scaler.pkl", "wb") as f:
+        pickle.dump(lstm_scaler, f)
 
     metadata = {
         "best_model":   best_name,
@@ -525,6 +511,7 @@ def save_best_model(
         "feature_cols": feature_cols,
         "target_col":   TARGET_COL,
         "all_metrics":  all_metrics,
+        "available_models": ["SARIMA", "LSTM"],
     }
     with open(MODELS_DIR / "model_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
@@ -814,4 +801,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -1,21 +1,21 @@
 # ─── Core data & ML ───────────────────────────────────────────────────────────
-numpy==1.26.4
-pandas==2.2.2
-scikit-learn==1.4.2
-scipy==1.13.0
+numpy==2.4.4
+pandas==3.0.2
+scikit-learn==1.8.0
+scipy==1.17.1
 
 # ─── Deep learning ────────────────────────────────────────────────────────────
-tensorflow==2.16.1          # CPU build; use tensorflow-gpu for GPU support
+tensorflow==2.21.0          # CPU build; use tensorflow-gpu for GPU support
 
 # ─── Time-series ──────────────────────────────────────────────────────────────
-statsmodels==0.14.2
+statsmodels==0.14.6
 
 # ─── API server ───────────────────────────────────────────────────────────────
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
-pydantic==2.7.1
+pydantic==2.13.3
 
 # ─── Optional: notebook exploration ──────────────────────────────────────────
-matplotlib==3.8.4
+matplotlib==3.10.9
 seaborn==0.13.2
 jupyter==1.0.0
