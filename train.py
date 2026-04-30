@@ -65,8 +65,11 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DATA_PATH   = "smart_meter_data.csv"       # ← change if your CSV is elsewhere
-MODELS_DIR  = Path("models")
-MODELS_DIR.mkdir(exist_ok=True)
+MODELS_DIR  = Path(os.getenv("MODEL_ARTIFACTS_DIR", "models")).expanduser()
+if not MODELS_DIR.is_absolute():
+    MODELS_DIR = Path(__file__).resolve().parent / MODELS_DIR
+MODELS_DIR = MODELS_DIR.resolve()
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(

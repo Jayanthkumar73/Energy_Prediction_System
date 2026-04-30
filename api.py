@@ -6,8 +6,11 @@
 """
 
 import json
+import importlib
+import os
 import pickle
 import logging
+import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -21,13 +24,87 @@ from pydantic import BaseModel, Field
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
 log = logging.getLogger(__name__)
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1fkneN8SuULjFOYjXFxS5ShEEsQwUqhi9?usp=sharing"
+REQUIRED_MODEL_FILES = [
+    "model_metadata.json",
+    "best_model.pkl",
+    "best_model.keras",
+    "lstm_scaler.pkl",
+]
+
 # ── Load saved model artifacts ────────────────────────────────────────────────
-MODELS_DIR = Path("models")
+def _get_cache_dir() -> Path:
+    raw_path = os.getenv("MODEL_ARTIFACTS_CACHE_DIR", ".model_cache")
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return path.resolve()
+
+
+def _has_required_artifacts(path: Path) -> bool:
+    return all((path / name).exists() for name in REQUIRED_MODEL_FILES)
+
+
+def _download_models_from_drive(destination: Path) -> Path:
+    folder_url = os.getenv("MODEL_ARTIFACTS_DRIVE_URL", DEFAULT_DRIVE_FOLDER_URL)
+
+    try:
+        gdown = importlib.import_module("gdown")
+    except Exception as exc:
+        raise RuntimeError(
+            "Google Drive model download requires the 'gdown' package. Install requirements.txt first."
+        ) from exc
+
+    destination.mkdir(parents=True, exist_ok=True)
+    log.info("Downloading model artifacts from Google Drive folder: %s", folder_url)
+
+    for item in destination.iterdir():
+        if item.is_file():
+            item.unlink()
+        elif item.is_dir():
+            shutil.rmtree(item)
+
+    downloaded = gdown.download_folder(
+        url=folder_url,
+        output=str(destination),
+        quiet=False,
+        use_cookies=False,
+        remaining_ok=True,
+    )
+
+    if not downloaded or not _has_required_artifacts(destination):
+        raise RuntimeError(
+            "Google Drive download completed, but the required model files were not found in the cache directory."
+        )
+
+    return destination
+
+
+def _resolve_models_dir() -> Path:
+    local_dir = os.getenv("MODEL_ARTIFACTS_DIR")
+    if local_dir:
+        path = Path(local_dir).expanduser()
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        path = path.resolve()
+        if _has_required_artifacts(path):
+            return path
+        log.warning("MODEL_ARTIFACTS_DIR is set but required files are missing: %s", path)
+
+    cache_dir = _get_cache_dir()
+    if _has_required_artifacts(cache_dir):
+        return cache_dir
+
+    return _download_models_from_drive(cache_dir)
+
+
+MODELS_DIR = _resolve_models_dir()
 
 def load_metadata():
     meta_path = MODELS_DIR / "model_metadata.json"
     if not meta_path.exists():
-        raise RuntimeError("models/model_metadata.json not found. Run train.py first.")
+        raise RuntimeError("model_metadata.json not found in the Drive-downloaded model cache.")
 
     with open(meta_path) as f:
         return json.load(f)
@@ -36,7 +113,7 @@ def load_metadata():
 def load_sarima_model():
     model_path = MODELS_DIR / "best_model.pkl"
     if not model_path.exists():
-        raise RuntimeError("SARIMA artifact models/best_model.pkl not found.")
+        raise RuntimeError("SARIMA artifact best_model.pkl not found in the Drive-downloaded model cache.")
 
     with open(model_path, "rb") as f:
         return pickle.load(f)
@@ -47,9 +124,9 @@ def load_lstm_model():
     scaler_path = MODELS_DIR / "lstm_scaler.pkl"
 
     if not model_path.exists():
-        raise RuntimeError("LSTM artifact models/best_model.keras not found.")
+        raise RuntimeError("LSTM artifact best_model.keras not found in the Drive-downloaded model cache.")
     if not scaler_path.exists():
-        raise RuntimeError("LSTM scaler models/lstm_scaler.pkl not found.")
+        raise RuntimeError("LSTM scaler lstm_scaler.pkl not found in the Drive-downloaded model cache.")
 
     import tensorflow as tf
 

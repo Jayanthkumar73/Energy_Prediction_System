@@ -3,7 +3,9 @@ __pycache__/
 *.pyo
 .env
 venv/
-
+models/
+*.keras
+*.pkl
 node_modules/
 frontend/dist/
 .pycache/
